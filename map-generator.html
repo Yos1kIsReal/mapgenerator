@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Map Generator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #0a0a1e; font-family: 'Segoe UI', sans-serif; color: #fff; }
+canvas { display: block; }
+
+#ui {
+  position: fixed; top: 10px; left: 10px; width: 280px; background: rgba(8,8,25,0.94);
+  border: 1px solid rgba(80,130,220,0.3); border-radius: 10px; padding: 14px; z-index: 10;
+  max-height: calc(100vh - 20px); overflow-y: auto;
+}
+#ui::-webkit-scrollbar { width: 5px; }
+#ui::-webkit-scrollbar-thumb { background: rgba(80,130,220,0.4); border-radius: 3px; }
+#ui h2 { font-size: 15px; margin-bottom: 10px; color: #7af; text-align: center; letter-spacing: 1px; }
+
+.field { margin-bottom: 7px; }
+.field label { display: block; font-size: 11px; color: #89a; margin-bottom: 2px; }
+.field input[type="text"] {
+  width: 100%; padding: 5px 8px; background: rgba(20,20,50,0.9); border: 1px solid rgba(80,130,220,0.3);
+  border-radius: 5px; color: #fff; font-size: 12px; outline: none;
+}
+.field input:focus { border-color: rgba(80,130,220,0.7); }
+.field input[type="range"] { width: 100%; accent-color: #5af; height: 4px; }
+.field input[type="color"] { width: 100%; height: 24px; border: 1px solid rgba(80,130,220,0.3); border-radius: 4px; background: none; cursor: pointer; padding: 0; }
+.field .range-val { font-size: 10px; color: #668; float: right; }
+
+.sep { border: none; border-top: 1px solid rgba(80,130,220,0.15); margin: 10px 0; }
+
+.buttons { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.buttons button {
+  padding: 6px 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 11px;
+  font-weight: 600; transition: all 0.15s; letter-spacing: 0.3px;
+}
+.btn-gen { background: #1a7a42; color: #fff; }
+.btn-gen:hover { background: #22994e; }
+.btn-stop { background: #a33; color: #fff; }
+.btn-stop:hover { background: #c44; }
+.btn-rand { background: #2a6aa0; color: #fff; }
+.btn-rand:hover { background: #3580b8; }
+.btn-reset { background: #555; color: #fff; }
+.btn-reset:hover { background: #666; }
+.btn-regen { background: #8a5a1a; color: #fff; }
+.btn-regen:hover { background: #a06a22; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#progress { margin-top: 6px; font-size: 11px; color: #7af; text-align: center; min-height: 14px; }
+#progress-bar {
+  width: 100%; height: 5px; background: rgba(20,20,50,0.9); border-radius: 3px; margin-top: 4px;
+  overflow: hidden; display: none;
+}
+#progress-bar-fill { height: 100%; background: linear-gradient(90deg, #1a7a42, #2a6aa0); width: 0%; transition: width 0.15s; }
+
+#info {
+  position: fixed; bottom: 10px; right: 10px; font-size: 10px; color: #446;
+  background: rgba(8,8,25,0.7); padding: 4px 8px; border-radius: 4px; z-index: 10;
+}
+
+#btn-download-wrap {
+  position: fixed; top: 10px; right: 10px; z-index: 20;
+  display: flex; gap: 4px;
+}
+.dl-btn {
+  padding: 8px 14px; background: rgba(8,8,25,0.94); border: 1px solid rgba(80,200,120,0.4);
+  border-radius: 8px; color: #8f8; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.dl-btn:hover { background: rgba(20,80,40,0.94); border-color: rgba(80,200,120,0.7); }
+.dl-flat { border-color: rgba(120,160,220,0.4); color: #8af; }
+.dl-flat:hover { background: rgba(20,40,80,0.94); border-color: rgba(120,160,220,0.7); }
+.dl-2d { border-color: rgba(200,160,80,0.4); color: #da8; }
+.dl-2d:hover { background: rgba(60,40,10,0.94); border-color: rgba(200,160,80,0.7); }
+.dl-2d.active { background: rgba(60,40,10,0.94); border-color: rgba(200,160,80,0.8); color: #fc8; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <h2>WORLD MAP GENERATOR</h2>
+
+  <div class="field">
+    <label>Seed</label>
+    <input type="text" id="seed-input" placeholder="Empty = random">
+  </div>
+
+  <hr class="sep">
+
+  <div class="field">
+    <label>Sea Level</label>
+    <input type="range" id="sea-level" min="10" max="80" value="40">
+    <span class="range-val" id="sea-level-val">40</span>
+  </div>
+
+  <div class="field">
+    <label>Max Elevation</label>
+    <input type="range" id="max-height" min="10" max="100" value="65">
+    <span class="range-val" id="max-height-val">55</span>
+  </div>
+
+  <div class="field">
+    <label>Continent Spread</label>
+    <input type="range" id="continent-spread" min="10" max="100" value="55">
+    <span class="range-val" id="continent-spread-val">55</span>
+  </div>
+
+  <div class="field">
+    <label>Land Mass</label>
+    <input type="range" id="land-mass" min="10" max="100" value="72">
+    <span class="range-val" id="land-mass-val">72</span>
+  </div>
+
+  <div class="field">
+    <label>Island Particles</label>
+    <input type="range" id="island-particles" min="0" max="300" value="80" step="10">
+    <span class="range-val" id="island-particles-val">80</span>
+  </div>
+
+  <div class="field">
+    <label>Mountain Strength</label>
+    <input type="range" id="mountain-strength" min="0" max="100" value="55">
+    <span class="range-val" id="mountain-strength-val">45</span>
+  </div>
+
+  <div class="field">
+    <label>Erosion</label>
+    <input type="range" id="erosion" min="0" max="100" value="40">
+    <span class="range-val" id="erosion-val">40</span>
+  </div>
+
+  <div class="field">
+    <label>Detail Level</label>
+    <input type="range" id="detail-level" min="1" max="8" value="5" step="1">
+    <span class="range-val" id="detail-level-val">5</span>
+  </div>
+
+  <div class="field">
+    <label>Generation Speed (ms)</label>
+    <input type="range" id="gen-speed" min="0" max="80" value="8">
+    <span class="range-val" id="gen-speed-val">8</span>
+  </div>
+
+  <hr class="sep">
+  <div style="font-size:10px;color:#567;text-align:center;margin-bottom:6px;">CLIMATE</div>
+
+  <div class="field">
+    <label>Temperature</label>
+    <input type="range" id="temperature" min="0" max="100" value="50">
+    <span class="range-val" id="temperature-val">50</span>
+  </div>
+
+  <div class="field">
+    <label>Humidity</label>
+    <input type="range" id="humidity" min="0" max="100" value="50">
+    <span class="range-val" id="humidity-val">50</span>
+  </div>
+
+  <div class="field">
+    <label>Snow Line</label>
+    <input type="range" id="snow-line" min="10" max="90" value="70">
+    <span class="range-val" id="snow-line-val">70</span>
+  </div>
+
+  <hr class="sep">
+  <div style="font-size:10px;color:#567;text-align:center;margin-bottom:6px;">TERRAIN</div>
+
+  <div class="field">
+    <label>Continent Count</label>
+    <input type="range" id="continent-count" min="1" max="15" value="5" step="1">
+    <span class="range-val" id="continent-count-val">5</span>
+  </div>
+
+  <div class="field">
+    <label>Coast Roughness</label>
+    <input type="range" id="coast-roughness" min="0" max="100" value="40">
+    <span class="range-val" id="coast-roughness-val">40</span>
+  </div>
+
+  <div class="field">
+    <label>Beach Width</label>
+    <input type="range" id="beach-width" min="0" max="100" value="30">
+    <span class="range-val" id="beach-width-val">30</span>
+  </div>
+
+  <div class="field">
+    <label>Rivers</label>
+    <input type="range" id="river-count" min="0" max="30" value="5" step="1">
+    <span class="range-val" id="river-count-val">5</span>
+  </div>
+
+  <div class="field">
+    <label>Ocean Depth</label>
+    <input type="range" id="ocean-depth" min="0" max="100" value="50">
+    <span class="range-val" id="ocean-depth-val">50</span>
+  </div>
+
+  <hr class="sep">
+  <div style="font-size:10px;color:#567;text-align:center;margin-bottom:6px;">COLORS</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+    <div class="field"><label>Deep Water</label><input type="color" id="c-deep-water" value="#030a2e" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Shallow Water</label><input type="color" id="c-shallow-water" value="#0d2670" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Coast Water</label><input type="color" id="c-coast-water" value="#14408c" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Beach</label><input type="color" id="c-beach" value="#d1bd7a" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Grass</label><input type="color" id="c-grass" value="#2e7a14" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Forest</label><input type="color" id="c-forest" value="#0f5206" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Desert</label><input type="color" id="c-desert" value="#cc994d" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Tundra</label><input type="color" id="c-tundra" value="#738059" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Highland</label><input type="color" id="c-highland" value="#807452" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Rock</label><input type="color" id="c-rock" value="#8c806b" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Snow</label><input type="color" id="c-snow" value="#e6eaf2" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+    <div class="field"><label>Swamp</label><input type="color" id="c-swamp" value="#1a4714" style="width:100%;height:24px;border:none;cursor:pointer;"></div>
+  </div>
+
+  <hr class="sep">
+
+  <div class="buttons">
+    <button class="btn-gen" id="btn-generate">Generate World</button>
+    <button class="btn-stop" id="btn-stop" disabled>Stop Generation</button>
+    <button class="btn-rand" id="btn-random">Random Seed</button>
+    <button class="btn-reset" id="btn-reset">Reset</button>
+    <button class="btn-regen" id="btn-regen" disabled>Regenerate</button>
+  </div>
+
+  <div id="progress"></div>
+  <div id="progress-bar"><div id="progress-bar-fill"></div></div>
+</div>
+
+<div id="info">LMB drag: Rotate | RMB drag: Tilt | Scroll: Zoom</div>
+
+<div id="btn-download-wrap">
+  <button id="btn-toggle-2d" class="dl-btn dl-2d">2D View</button>
+  <button id="btn-download" class="dl-btn">Download 3D</button>
+  <button id="btn-download-flat" class="dl-btn dl-flat">Download Map</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+
+// ===================== SIMPLEX NOISE =====================
+class SimplexNoise {
+  constructor(seed = 0) {
+    this.perm = new Uint8Array(512);
+    this.permMod12 = new Uint8Array(512);
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    let s = seed || 1;
+    for (let i = 255; i > 0; i--) {
+      s = (s * 16807) % 2147483647;
+      const j = s % (i + 1);
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    for (let i = 0; i < 512; i++) {
+      this.perm[i] = p[i & 255];
+      this.permMod12[i] = this.perm[i] % 12;
+    }
+    this.grad3 = [
+      [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+      [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
+      [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
+    ];
+  }
+
+  dot2(g, x, y) { return g[0]*x + g[1]*y; }
+
+  noise2D(xin, yin) {
+    const F2 = 0.5*(Math.sqrt(3)-1), G2 = (3-Math.sqrt(3))/6;
+    const s = (xin+yin)*F2;
+    const i = Math.floor(xin+s), j = Math.floor(yin+s);
+    const t = (i+j)*G2;
+    const x0 = xin-(i-t), y0 = yin-(j-t);
+    const i1 = x0>y0?1:0, j1 = x0>y0?0:1;
+    const x1 = x0-i1+G2, y1 = y0-j1+G2;
+    const x2 = x0-1+2*G2, y2 = y0-1+2*G2;
+    const ii = i&255, jj = j&255;
+    let n0=0, n1=0, n2=0;
+    let t0 = 0.5-x0*x0-y0*y0;
+    if(t0>=0){t0*=t0;n0=t0*t0*this.dot2(this.grad3[this.permMod12[ii+this.perm[jj]]],x0,y0);}
+    let t1 = 0.5-x1*x1-y1*y1;
+    if(t1>=0){t1*=t1;n1=t1*t1*this.dot2(this.grad3[this.permMod12[ii+i1+this.perm[jj+j1]]],x1,y1);}
+    let t2 = 0.5-x2*x2-y2*y2;
+    if(t2>=0){t2*=t2;n2=t2*t2*this.dot2(this.grad3[this.permMod12[ii+1+this.perm[jj+1]]],x2,y2);}
+    return 70*(n0+n1+n2);
+  }
+}
+
+// ===================== NOISE UTILS =====================
+function fbm(noise, x, y, oct, lac=2.0, gain=0.5) {
+  let v=0, a=1, f=1, m=0;
+  for(let i=0;i<oct;i++){v+=a*noise.noise2D(x*f,y*f);m+=a;a*=gain;f*=lac;}
+  return v/m;
+}
+
+function ridged(noise, x, y, oct, lac=2.0, gain=0.5) {
+  let v=0, a=1, f=1, m=0;
+  for(let i=0;i<oct;i++){
+    let n = Math.abs(noise.noise2D(x*f,y*f));
+    n = 1.0-n; n*=n;
+    v+=a*n; m+=a; a*=gain; f*=lac;
+  }
+  return v/m;
+}
+
+function warped(noise, x, y, oct) {
+  const qx = fbm(noise, x, y, oct);
+  const qy = fbm(noise, x+5.2, y+1.3, oct);
+  return fbm(noise, x+qx*0.4, y+qy*0.4, oct);
+}
+
+// ===================== THREE.JS SETUP =====================
+const MAP = 512;
+const MAP_W = 1024;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x060612);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 1200);
+camera.position.set(0, 220, 280);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.35;
+document.body.appendChild(renderer.domElement);
+
+const orbit = new THREE.OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.07;
+orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+orbit.minDistance = 30;
+orbit.maxDistance = 600;
+orbit.maxPolarAngle = Math.PI*0.48;
+
+scene.add(new THREE.AmbientLight(0x445566, 0.7));
+const sun = new THREE.DirectionalLight(0xffeedd, 1.3);
+sun.position.set(60, 90, 40);
+sun.castShadow = true;
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0x6688aa, 0.3).translateX(-40).translateY(20).translateZ(-30));
+
+// ===================== MESH =====================
+const geo = new THREE.PlaneGeometry(500, 250, MAP_W-1, MAP-1);
+geo.rotateX(-Math.PI/2);
+const pos = geo.getAttribute('position');
+const col = new Float32Array(pos.count*3);
+geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+
+const mat = new THREE.MeshPhongMaterial({
+  vertexColors: true, flatShading: false, shininess: 20, side: THREE.DoubleSide
+});
+const mesh = new THREE.Mesh(geo, mat);
+mesh.receiveShadow = true;
+mesh.castShadow = true;
+scene.add(mesh);
+
+// Water plane — positioned well below terrain
+const waterGeo = new THREE.PlaneGeometry(600, 350);
+waterGeo.rotateX(-Math.PI/2);
+const waterMat = new THREE.MeshPhongMaterial({
+  color: 0x1a4477, transparent: true, opacity: 0.35, shininess: 80, specular: 0x4488bb,
+  depthWrite: false, side: THREE.DoubleSide
+});
+const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+waterMesh.renderOrder = 1;
+waterMesh.position.y = -2;
+scene.add(waterMesh);
+
+// Country overlay mesh
+const countryGeo = new THREE.PlaneGeometry(420, 420, MAP-1, MAP-1);
+countryGeo.rotateX(-Math.PI/2);
+const countryCol = new Float32Array(countryGeo.getAttribute('position').count*3);
+countryGeo.setAttribute('color', new THREE.BufferAttribute(countryCol, 3));
+const countryMat = new THREE.MeshPhongMaterial({
+  vertexColors: true, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+  depthWrite: false
+});
+const countryMesh = new THREE.Mesh(countryGeo, countryMat);
+countryMesh.renderOrder = 2;
+countryMesh.visible = false;
+scene.add(countryMesh);
+
+// ===================== COLORING =====================
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+function hex2rgb(hex){ return [parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255]; }
+
+function getUserColors(){
+  return {
+    deepWater:    hex2rgb(document.getElementById('c-deep-water').value),
+    shallowWater: hex2rgb(document.getElementById('c-shallow-water').value),
+    coastWater:   hex2rgb(document.getElementById('c-coast-water').value),
+    beach:        hex2rgb(document.getElementById('c-beach').value),
+    grass:        hex2rgb(document.getElementById('c-grass').value),
+    forest:       hex2rgb(document.getElementById('c-forest').value),
+    desert:       hex2rgb(document.getElementById('c-desert').value),
+    tundra:       hex2rgb(document.getElementById('c-tundra').value),
+    highland:     hex2rgb(document.getElementById('c-highland').value),
+    rock:         hex2rgb(document.getElementById('c-rock').value),
+    snow:         hex2rgb(document.getElementById('c-snow').value),
+    swamp:        hex2rgb(document.getElementById('c-swamp').value),
+  };
+}
+
+function getColor(h, sl, nx, nz, noiseRef, tempShift, humidShift, snowLvl, beachW, oceanD, uc) {
+  if(!uc) uc = getUserColors();
+  const deepWater    = uc.deepWater;
+  const midWater     = [(uc.deepWater[0]+uc.shallowWater[0])*0.5,(uc.deepWater[1]+uc.shallowWater[1])*0.5,(uc.deepWater[2]+uc.shallowWater[2])*0.5];
+  const shallowWater = uc.shallowWater;
+  const coastWater   = uc.coastWater;
+  const beach        = uc.beach;
+
+  const grassLight   = [uc.grass[0]*1.3, uc.grass[1]*1.2, uc.grass[2]*1.1];
+  const grass        = uc.grass;
+  const grassDark    = [uc.grass[0]*0.6, uc.grass[1]*0.7, uc.grass[2]*0.6];
+  const forest       = uc.forest;
+  const forestDark   = [uc.forest[0]*0.5, uc.forest[1]*0.6, uc.forest[2]*0.5];
+  const swamp        = uc.swamp;
+  const desert       = uc.desert;
+  const savanna      = [(uc.desert[0]+uc.grass[0])*0.5, (uc.desert[1]+uc.grass[1])*0.5, (uc.desert[2]+uc.grass[2])*0.5];
+  const taiga        = [uc.forest[0]*0.8, uc.forest[1]*1.1, uc.forest[2]*0.8];
+  const tundra       = uc.tundra;
+  const highland     = uc.highland;
+  const rock         = uc.rock;
+  const snow         = uc.snow;
+
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  function blend3(a, b, c, t1, t2) {
+    if(t1 <= 0) return a;
+    if(t1 >= 1 && t2 <= 0) return b;
+    if(t2 >= 1) return c;
+    const f1 = 1 - t1;
+    const f2 = t1 * (1 - t2);
+    const f3 = t1 * t2;
+    return [
+      a[0]*f1 + b[0]*f2 + c[0]*f3,
+      a[1]*f1 + b[1]*f2 + c[1]*f3,
+      a[2]*f1 + b[2]*f2 + c[2]*f3
+    ];
+  }
+
+  let r, g, b;
+
+  const temp  = noiseRef ? clamp((noiseRef.noise2D(nx * 3, nz * 3) + 1) * 0.5 + (tempShift - 0.5) * 0.6, 0, 1) : 0.5;
+  const moist = noiseRef ? clamp((noiseRef.noise2D(nx * 2.5 + 50, nz * 2.5 + 50) + 1) * 0.5 + (humidShift - 0.5) * 0.6, 0, 1) : 0.5;
+
+  if (h < sl) {
+    const tWater = h / sl;
+    const depthMul = 0.5 + oceanD * 0.8;
+    const tw1 = smoothstep(0, 0.4, tWater);
+    const tw2 = smoothstep(0.4, 0.7, tWater);
+    const tw3 = smoothstep(0.7, 0.95, tWater);
+    const wc1 = lerpC(deepWater, midWater, tw1);
+    const wc2 = lerpC(midWater, shallowWater, tw2);
+    const wc3 = lerpC(shallowWater, coastWater, tw3);
+    const wc4 = lerpC(coastWater, beach, smoothstep(0.95, 1.0, tWater));
+    const nvar = noiseRef ? noiseRef.noise2D(nx*12, nz*12)*0.02 : 0;
+    if(tWater < 0.4) { r=(wc1[0]+nvar)*depthMul; g=(wc1[1]+nvar)*depthMul; b=(wc1[2]+nvar)*depthMul; }
+    else if(tWater < 0.7) { r=(wc2[0]+nvar)*depthMul; g=(wc2[1]+nvar)*depthMul; b=(wc2[2]+nvar)*depthMul; }
+    else if(tWater < 0.95) { r=(wc3[0]+nvar)*depthMul; g=(wc3[1]+nvar)*depthMul; b=(wc3[2]+nvar)*depthMul; }
+    else { r=wc4[0]*depthMul; g=wc4[1]*depthMul; b=wc4[2]*depthMul; }
+  } else {
+    const landH = h - sl;
+    const totalLand = 1 - sl;
+    const elev = clamp(landH / totalLand, 0, 1);
+
+    const nvar = noiseRef ? noiseRef.noise2D(nx*20, nz*20)*0.06 : 0;
+    const elevN = clamp(elev + nvar, 0, 1);
+
+    const desertW = clamp(smoothstep(0.40, 0.75, temp) * smoothstep(0.50, 0.15, moist), 0, 1);
+    const swampW  = clamp(smoothstep(0.70, 0.40, temp) * smoothstep(0.40, 0.70, moist), 0, 1);
+    const taigaW  = clamp(smoothstep(0.50, 0.20, temp) * smoothstep(0.30, 0.60, moist), 0, 1);
+    const tundraW = clamp(smoothstep(0.45, 0.15, temp) * smoothstep(0.55, 0.25, moist), 0, 1);
+    const forestW = clamp(smoothstep(0.30, 0.60, moist) * smoothstep(0.25, 0.55, temp), 0, 1);
+    const grassW  = clamp(1.0 - desertW - swampW - taigaW - tundraW - forestW, 0, 1);
+    const wSum = desertW + swampW + taigaW + tundraW + forestW + grassW;
+
+    function blendBiomes(a,b,c,d,e,f, w1,w2,w3,w4,w5,w6){
+      const inv = 1.0 / (wSum || 1);
+      return [
+        (a[0]*w1 + b[0]*w2 + c[0]*w3 + d[0]*w4 + e[0]*w5 + f[0]*w6) * inv,
+        (a[1]*w1 + b[1]*w2 + c[1]*w3 + d[1]*w4 + e[1]*w5 + f[1]*w6) * inv,
+        (a[2]*w1 + b[2]*w2 + c[2]*w3 + d[2]*w4 + e[2]*w5 + f[2]*w6) * inv
+      ];
+    }
+
+    const lowBiome = blendBiomes(grassLight, desert, swamp, taiga, tundra, grass, grassW, desertW, swampW, taigaW, tundraW, forestW);
+
+    const midForestW = clamp(smoothstep(0.25, 0.55, temp) * smoothstep(0.35, 0.65, moist), 0, 1);
+    const midTaigaW  = clamp(smoothstep(0.50, 0.20, temp), 0, 1);
+    const midGrassW  = clamp(1.0 - midForestW - midTaigaW, 0, 1);
+    const midSum = midForestW + midTaigaW + midGrassW || 1;
+
+    const midBiome = [
+      (forest[0]*midForestW + taiga[0]*midTaigaW + grassDark[0]*midGrassW) / midSum,
+      (forest[1]*midForestW + taiga[1]*midTaigaW + grassDark[1]*midGrassW) / midSum,
+      (forest[2]*midForestW + taiga[2]*midTaigaW + grassDark[2]*midGrassW) / midSum
+    ];
+
+    const highColdW = clamp(smoothstep(0.45, 0.15, temp), 0, 1);
+    const highWarmW = clamp(1.0 - highColdW, 0, 1);
+
+    const highBiome = [
+      tundra[0]*highColdW + forestDark[0]*highWarmW*0.5 + highland[0]*highWarmW*0.5,
+      tundra[1]*highColdW + forestDark[1]*highWarmW*0.5 + highland[1]*highWarmW*0.5,
+      tundra[2]*highColdW + forestDark[2]*highWarmW*0.5 + highland[2]*highWarmW*0.5
+    ];
+
+    const beachBlend = smoothstep(-0.06, 0.12 + beachW*0.12, elevN);
+    const lowBlend   = smoothstep(0.00, 0.25, elevN);
+    const midBlend   = smoothstep(0.10, 0.45, elevN);
+    const highBlend  = smoothstep(0.25, 0.60, elevN);
+    const rockBlend  = smoothstep(0.50, 0.80, elevN);
+    const snowBlend  = smoothstep(0.65 + snowLvl*0.12, 0.92 + snowLvl*0.06, elevN);
+
+    const w1 = 1.0 - beachBlend;
+    const w2 = beachBlend * (1.0 - lowBlend);
+    const w3 = beachBlend * lowBlend * (1.0 - midBlend);
+    const w4 = beachBlend * lowBlend * midBlend * (1.0 - highBlend);
+    const w5 = beachBlend * lowBlend * midBlend * highBlend * (1.0 - rockBlend);
+    const w6 = beachBlend * lowBlend * midBlend * highBlend * rockBlend * (1.0 - snowBlend);
+    const w7 = beachBlend * lowBlend * midBlend * highBlend * rockBlend * snowBlend;
+
+    const layers = [beach, lowBiome, midBiome, highBiome, rock, snow];
+    const weights = [w1, w2, w3, w4, w5, w6, w7];
+    const wTotal = w1+w2+w3+w4+w5+w6+w7 || 1;
+
+    r = (layers[0][0]*w1 + layers[1][0]*w2 + layers[2][0]*w3 + layers[3][0]*w4 + layers[4][0]*w5 + layers[5][0]*w6 + layers[5][0]*w7) / wTotal;
+    g = (layers[0][1]*w1 + layers[1][1]*w2 + layers[2][1]*w3 + layers[3][1]*w4 + layers[4][1]*w5 + layers[5][1]*w6 + layers[5][1]*w7) / wTotal;
+    b = (layers[0][2]*w1 + layers[1][2]*w2 + layers[2][2]*w3 + layers[3][2]*w4 + layers[4][2]*w5 + layers[5][2]*w6 + layers[5][2]*w7) / wTotal;
+  }
+
+  return [clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1)];
+}
+
+function lerpC(a, b, t) {
+  t = clamp(t, 0, 1);
+  return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+}
+
+// ===================== GENERATION =====================
+let heightData;
+let currentSeed = '';
+let isGenerating = false;
+const totalSteps = 8;
+
+function getSeedVal() {
+  const v = document.getElementById('seed-input').value.trim();
+  if (!v) return Math.floor(Math.random()*9999999);
+  let h=0; for(let i=0;i<v.length;i++){h=((h<<5)-h)+v.charCodeAt(i);h|=0;}
+  return Math.abs(h)||1;
+}
+
+function getSettings() {
+  return {
+    seaLevel:      parseInt(document.getElementById('sea-level').value)/100,
+    maxHeight:     parseInt(document.getElementById('max-height').value)/100,
+    continentSpread: parseInt(document.getElementById('continent-spread').value)/100,
+    landMass:      parseInt(document.getElementById('land-mass').value)/100,
+    islandParticles: parseInt(document.getElementById('island-particles').value),
+    mountainStr:   parseInt(document.getElementById('mountain-strength').value)/100,
+    erosion:       parseInt(document.getElementById('erosion').value)/100,
+    detail:        parseInt(document.getElementById('detail-level').value),
+    genSpeed:      parseInt(document.getElementById('gen-speed').value),
+    temperature:   parseInt(document.getElementById('temperature').value)/100,
+    humidity:      parseInt(document.getElementById('humidity').value)/100,
+    snowLine:      parseInt(document.getElementById('snow-line').value)/100,
+    continentCount: parseInt(document.getElementById('continent-count').value),
+    coastRoughness: parseInt(document.getElementById('coast-roughness').value)/100,
+    beachWidth:    parseInt(document.getElementById('beach-width').value)/100,
+    riverCount:    parseInt(document.getElementById('river-count').value),
+    oceanDepth:    parseInt(document.getElementById('ocean-depth').value)/100,
+  };
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function prog(step, msg) {
+  const pct = Math.min(100, Math.round((step/totalSteps)*100));
+  document.getElementById('progress').textContent = `${msg} ${pct}%`;
+  document.getElementById('progress-bar').style.display = 'block';
+  document.getElementById('progress-bar-fill').style.width = pct+'%';
+}
+
+function seededRand(s) {
+  s = ((s*1103515245+12345)&0x7fffffff);
+  return (s&0xffff)/0x10000;
+}
+
+// ===================== GENERATE WORLD =====================
+async function generateWorld(seedVal, S) {
+  console.log('[MAP] generateWorld start, seedVal='+seedVal);
+  const n1 = new SimplexNoise(seedVal);
+  const n2 = new SimplexNoise(seedVal+100);
+  const n3 = new SimplexNoise(seedVal+200);
+  const n4 = new SimplexNoise(seedVal+300);
+  const n5 = new SimplexNoise(seedVal+400);
+  const n6 = new SimplexNoise(seedVal+500);
+
+  heightData = new Float32Array(MAP_W*MAP);
+
+  const sl = S.seaLevel;
+  const mStr = S.mountainStr;
+  const erode = S.erosion;
+  const detail = S.detail;
+  const spread = S.continentSpread;
+  const landM = S.landMass;
+  const temp = S.temperature;
+  const humid = S.humidity;
+  const snowLvl = S.snowLine;
+  const contCount = S.continentCount;
+  const coastR = S.coastRoughness;
+  const beachW = S.beachWidth;
+  const riverN = S.riverCount;
+  const oceanD = S.oceanDepth;
+
+  const baseScale = 1.0 + spread * 2.0;
+  const heightScale = S.maxHeight * 40;
+  const aspect = MAP_W / MAP;
+
+  function applyMesh(){
+    const uc = getUserColors();
+    for(let i=0;i<MAP_W*MAP;i++){
+      const h=clamp(heightData[i],-0.3,1.1);
+      pos.setY(i,h*heightScale);
+      const [r,g,b]=getColor(h,sl,(i%MAP_W)/MAP_W,Math.floor(i/MAP_W)/MAP,n6, temp, humid, snowLvl, beachW, oceanD, uc);
+      col[i*3]=r;col[i*3+1]=g;col[i*3+2]=b;
+    }
+    pos.needsUpdate=true;
+    geo.getAttribute('color').needsUpdate=true;
+    geo.computeVertexNormals();
+    waterMesh.position.y=sl*heightScale;
+  }
+
+  function blobHeight(nx, nz, bx, bz, br, cn){
+    const dx = (nx-bx)*aspect, dz = nz-bz;
+    const dist = Math.sqrt(dx*dx+dz*dz);
+    if(dist > br*2.0) return 0;
+    const shape = 0.5+0.5*cn.noise2D(nx*6, nz*6);
+    const t = 1-dist/(br*2.0);
+    return t*t*t*shape;
+  }
+
+  prog(1, 'Building continents...');
+
+  const contSeeds = [];
+  for(let i=0;i<50;i++) contSeeds.push(seedVal+100+i*100);
+
+  const cRand = (i,off) => seededRand(contSeeds[i]+off);
+
+  const continents = [];
+  const numLarge = Math.max(1, contCount);
+  for(let i=0;i<numLarge;i++){
+    continents.push({
+      x: 0.08 + cRand(i,1)*0.84,
+      z: 0.10 + cRand(i,2)*0.80,
+      r: 0.10 + cRand(i,3)*0.10,
+      h: 0.35 + cRand(i,4)*0.25,
+      n: new SimplexNoise(contSeeds[i])
+    });
+  }
+  const numMed = 4 + Math.floor(cRand(1,5)*5);
+  for(let i=0;i<numMed;i++){
+    const idx = numLarge+i;
+    continents.push({
+      x: 0.05 + cRand(idx,1)*0.90,
+      z: 0.10 + cRand(idx,2)*0.80,
+      r: 0.05 + cRand(idx,3)*0.06,
+      h: 0.25 + cRand(idx,4)*0.20,
+      n: new SimplexNoise(contSeeds[idx])
+    });
+  }
+  const numSmall = 3 + Math.floor(cRand(2,6)*4);
+  for(let i=0;i<numSmall;i++){
+    const idx = numLarge+numMed+i;
+    continents.push({
+      x: 0.03 + cRand(idx,1)*0.94,
+      z: 0.08 + cRand(idx,2)*0.84,
+      r: 0.02 + cRand(idx,3)*0.04,
+      h: 0.20 + cRand(idx,4)*0.20,
+      n: new SimplexNoise(contSeeds[idx])
+    });
+  }
+
+  for(let z=0;z<MAP;z++){
+    for(let x=0;x<MAP_W;x++){
+      const nx=x/MAP_W, nz=z/MAP;
+      let h = fbm(n1, nx*baseScale*aspect, nz*baseScale, detail, 2.0, 0.5);
+      let landH = 0;
+      for(const c of continents){
+        landH += blobHeight(nx, nz, c.x, c.z, c.r, c.n) * c.h;
+      }
+      heightData[z*MAP_W+x] = h * 0.3 + landH;
+    }
+    if(S.genSpeed>0 && z%50===0) await sleep(S.genSpeed);
+  }
+  applyMesh();
+
+  // ---- STEP 2: Edge falloff ----
+  prog(2, 'Carving coastlines...');
+  for(let z=0;z<MAP;z++){
+    for(let x=0;x<MAP_W;x++){
+      const nx=x/MAP_W, nz=z/MAP;
+      let h = heightData[z*MAP_W+x];
+      const edgeDistX = Math.min(x, MAP_W-1-x);
+      const edgeDistZ = Math.min(z, MAP-1-z);
+      const edgeDist = Math.min(edgeDistX/aspect, edgeDistZ);
+      const edgeNoise = fbm(n3, nx*8*aspect, nz*8, 4);
+      const edgeW = 0.03 + edgeNoise * 0.04 * coastR;
+      const edgeNorm = edgeDist / MAP;
+      if(edgeNorm < edgeW){
+        const t = edgeNorm/edgeW;
+        h = h*t - (1-t)*0.5;
+      }
+      h += (landM - 0.25)*0.3;
+      heightData[z*MAP_W+x] = h;
+    }
+    if(S.genSpeed>0 && z%50===0) await sleep(S.genSpeed);
+  }
+  applyMesh();
+
+  // ---- STEP 4: Small islands ----
+  prog(3, 'Adding islands...');
+  const numIslands = Math.floor(S.islandParticles * 0.3);
+  const edgeSafe = MAP_W * 0.2;
+  for(let i=0;i<numIslands;i++){
+    const ix = edgeSafe + seededRand(seedVal+4000+i*11)*(MAP_W-edgeSafe*2);
+    const iz = edgeSafe + seededRand(seedVal+5000+i*13)*(MAP-edgeSafe*2);
+    if(heightData[Math.floor(iz)*MAP_W+Math.floor(ix)] > sl*0.5) continue;
+    const ir = 4+seededRand(seedVal+6000+i*17)*10;
+    const istr = 0.07+seededRand(seedVal+7000+i*19)*0.08;
+    const inoise = new SimplexNoise(seedVal+8000+i);
+    for(let z2=Math.max(0,Math.floor(iz-ir-2));z2<Math.min(MAP,Math.ceil(iz+ir+2));z2++){
+      for(let x2=Math.max(0,Math.floor(ix-ir-2));x2<Math.min(MAP_W,Math.ceil(ix+ir+2));x2++){
+        const dx=x2-ix, dz=z2-iz;
+        const dist=Math.sqrt(dx*dx+dz*dz);
+        if(dist<ir){
+          const shape = 0.5+0.5*inoise.noise2D((x2-ix)/ir*4,(z2-iz)/ir*4);
+          heightData[z2*MAP_W+x2] += (1-dist/ir)*(1-dist/ir)*istr*shape;
+        }
+      }
+    }
+  }
+  if(S.genSpeed>0) await sleep(S.genSpeed);
+  applyMesh();
+
+  // ---- STEP 6: Raise land ----
+  prog(4, 'Raising land...');
+  for(let i=0;i<MAP_W*MAP;i++){
+    if(heightData[i] > sl*0.4){
+      heightData[i] = sl + (heightData[i]-sl*0.4)/(1-sl*0.4)*(1-sl);
+    }
+  }
+  if(S.genSpeed>0) await sleep(S.genSpeed);
+  applyMesh();
+
+  // ---- STEP 3: Mountain chains (ridged noise) ----
+  prog(5, 'Building mountains...');
+  for(let z=0;z<MAP;z++){
+    for(let x=0;x<MAP_W;x++){
+      const nx=x/MAP_W, nz=z/MAP;
+      const h = heightData[z*MAP_W+x];
+      if(h > sl+0.05){
+        const landness = clamp((h-sl)/(1-sl), 0, 1);
+        const r1 = ridged(n2, nx*6*aspect+3.7, nz*6+1.2, detail);
+        const r2 = ridged(n3, nx*5*aspect+8.1, nz*5+4.9, detail);
+        const ridgeMask = Math.max(r1, r2*0.8);
+        const ridgePow = Math.pow(ridgeMask, 2.2);
+        heightData[z*MAP_W+x] += ridgePow * mStr * 0.7 * landness;
+      }
+    }
+    if(S.genSpeed>0 && z%50===0) await sleep(S.genSpeed);
+  }
+
+  // ---- STEP 4: Hills + erosion + smoothing ----
+  prog(6, 'Sculpting and eroding...');
+  for(let z=0;z<MAP;z++){
+    for(let x=0;x<MAP_W;x++){
+      const nx=x/MAP_W, nz=z/MAP;
+      const h = heightData[z*MAP_W+x];
+      if(h > sl+0.02){
+        const landness = clamp((h-sl)/(1-sl), 0, 1);
+        heightData[z*MAP_W+x] += fbm(n4, nx*18*aspect, nz*18, 3)*0.08*landness;
+        heightData[z*MAP_W+x] += fbm(n5, nx*4*aspect+15, nz*4+15, 2)*0.05*landness;
+      }
+    }
+  }
+  if(erode > 0.05){
+    const erodePasses = Math.floor(erode*8);
+    const talus = 0.003*erode;
+    for(let pass=0;pass<erodePasses;pass++){
+      for(let z=1;z<MAP-1;z++){
+        for(let x=1;x<MAP_W-1;x++){
+          const idx=z*MAP_W+x;
+          const h=heightData[idx];
+          if(h<sl-0.1) continue;
+          let maxDiff=0, maxDz=0, maxDx=0;
+          for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]){
+            const nh=heightData[(z+dz)*MAP_W+(x+dx)];
+            const diff=h-nh;
+            if(diff>maxDiff){maxDiff=diff;maxDx=dx;maxDz=dz;}
+          }
+          if(maxDiff>talus){
+            const transfer=maxDiff*0.25;
+            heightData[idx]-=transfer;
+            heightData[(z+maxDz)*MAP_W+(x+maxDx)]+=transfer;
+          }
+        }
+      }
+    }
+  }
+  const smoothPasses = Math.max(1, Math.floor(erode*3));
+  for(let pass=0;pass<smoothPasses;pass++){
+    for(let z=1;z<MAP-1;z++){
+      for(let x=1;x<MAP_W-1;x++){
+        const idx=z*MAP_W+x;
+        const h=heightData[idx];
+        if(h<sl-0.15) continue;
+        const avg=(heightData[idx]+heightData[idx-1]+heightData[idx+1]+
+                   heightData[(z-1)*MAP_W+x]+heightData[(z+1)*MAP_W+x])*0.2;
+        heightData[idx]=h*0.7+avg*0.3;
+      }
+    }
+  }
+  if(S.genSpeed>0) await sleep(S.genSpeed);
+
+  // ---- STEP 5: Rivers ----
+  prog(7, 'Carving rivers...');
+  const numRivers = riverN;
+  for(let r=0;r<numRivers;r++){
+    let rx=Math.floor(seededRand(seedVal+2100+r*13)*MAP_W);
+    let rz=Math.floor(seededRand(seedVal+2200+r*17)*MAP);
+    if(heightData[rz*MAP_W+rx]<sl+0.05) continue;
+    for(let step=0;step<300;step++){
+      const idx=rz*MAP_W+rx;
+      if(heightData[idx]<sl-0.05) break;
+      heightData[idx]-=0.008;
+      for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nx2=rx+dx, nz2=rz+dz;
+        if(nx2>=0&&nx2<MAP_W&&nz2>=0&&nz2<MAP) heightData[nz2*MAP_W+nx2]-=0.003;
+      }
+      let minH=heightData[idx], nextX=rx, nextZ=rz;
+      for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]){
+        const nx2=rx+dx, nz2=rz+dz;
+        if(nx2>=0&&nx2<MAP_W&&nz2>=0&&nz2<MAP){
+          if(heightData[nz2*MAP_W+nx2]<minH){minH=heightData[nz2*MAP_W+nx2];nextX=nx2;nextZ=nz2;}
+        }
+      }
+      rx=nextX; rz=nextZ;
+    }
+  }
+  if(S.genSpeed>0) await sleep(S.genSpeed);
+
+  // ---- STEP 6: Apply to mesh ----
+  prog(8, 'Rendering world...');
+  applyMesh();
+  prog(8, 'Generation complete');
+}
+
+// ===================== CONTROLS =====================
+document.getElementById('btn-generate').onclick = startGen;
+document.getElementById('btn-stop').onclick = stopGen;
+document.getElementById('btn-random').onclick = ()=>{document.getElementById('seed-input').value=Math.floor(Math.random()*9999999);};
+document.getElementById('btn-reset').onclick = resetAll;
+document.getElementById('btn-regen').onclick = ()=>{
+  if(currentSeed){document.getElementById('seed-input').value=currentSeed;startGen();}
+};
+
+
+async function startGen(){
+  if(isGenerating) return;
+  isGenerating=true;
+  document.getElementById('btn-generate').disabled=true;
+  document.getElementById('btn-stop').disabled=false;
+  document.getElementById('btn-regen').disabled=true;
+  try{
+    const sv=getSeedVal();
+    currentSeed=sv.toString();
+    document.getElementById('seed-input').value=currentSeed;
+    console.log('[MAP] startGen seed='+sv);
+    await generateWorld(sv,getSettings());
+    console.log('[MAP] generateWorld done');
+  }catch(e){
+    console.error('[MAP] ERROR:', e);
+    document.getElementById('progress').textContent='Error: '+e.message;
+    document.getElementById('progress').style.color='#f55';
+    document.getElementById('progress-bar').style.display='none';
+  }
+  isGenerating=false;
+  document.getElementById('btn-generate').disabled=false;
+  document.getElementById('btn-stop').disabled=true;
+  document.getElementById('btn-regen').disabled=false;
+}
+
+function stopGen(){
+  isGenerating=false;
+  document.getElementById('btn-generate').disabled=false;
+  document.getElementById('btn-stop').disabled=true;
+  document.getElementById('progress').textContent='Stopped';
+  document.getElementById('progress-bar').style.display='none';
+}
+
+function resetAll(){
+  stopGen();
+  document.getElementById('seed-input').value='';
+  document.getElementById('sea-level').value=40;
+  document.getElementById('max-height').value=65;
+  document.getElementById('continent-spread').value=55;
+  document.getElementById('land-mass').value=72;
+  document.getElementById('island-particles').value=80;
+  document.getElementById('mountain-strength').value=55;
+  document.getElementById('erosion').value=40;
+  document.getElementById('detail-level').value=5;
+  document.getElementById('gen-speed').value=8;
+  document.getElementById('temperature').value=50;
+  document.getElementById('humidity').value=50;
+  document.getElementById('snow-line').value=70;
+  document.getElementById('continent-count').value=5;
+  document.getElementById('coast-roughness').value=40;
+  document.getElementById('beach-width').value=30;
+  document.getElementById('river-count').value=5;
+  document.getElementById('ocean-depth').value=50;
+  updRanges();
+  document.getElementById('progress').textContent='';
+  document.getElementById('progress-bar').style.display='none';
+  document.getElementById('btn-regen').disabled=true;
+  for(let i=0;i<pos.count;i++){pos.setY(i,0);col[i*3]=0.05;col[i*3+1]=0.05;col[i*3+2]=0.2;}
+  pos.needsUpdate=true;geo.getAttribute('color').needsUpdate=true;geo.computeVertexNormals();
+}
+
+function updRanges(){
+  document.querySelectorAll('.field input[type="range"]').forEach(inp=>{
+    const el=document.getElementById(inp.id+'-val');
+    if(el) el.textContent=inp.value;
+  });
+}
+document.querySelectorAll('.field input[type="range"]').forEach(inp=>inp.addEventListener('input',updRanges));
+
+document.querySelectorAll('.field input[type="color"]').forEach(inp=>inp.addEventListener('input',()=>{
+  if(!heightData) return;
+  clearTimeout(inp._debounce);
+  inp._debounce = setTimeout(()=>{
+    const uc = getUserColors();
+    const sl = parseInt(document.getElementById('sea-level').value)/100;
+    const temp = parseInt(document.getElementById('temperature').value)/100;
+    const humid = parseInt(document.getElementById('humidity').value)/100;
+    const snowLvl = parseInt(document.getElementById('snow-line').value)/100;
+    const beachW = parseInt(document.getElementById('beach-width').value)/100;
+    const oceanD = parseInt(document.getElementById('ocean-depth').value)/100;
+    for(let i=0;i<MAP_W*MAP;i++){
+      const h=clamp(heightData[i],-0.3,1.1);
+      const [r,g,b]=getColor(h,sl,(i%MAP_W)/MAP_W,Math.floor(i/MAP_W)/MAP,null, temp, humid, snowLvl, beachW, oceanD, uc);
+      col[i*3]=r;col[i*3+1]=g;col[i*3+2]=b;
+    }
+    geo.getAttribute('color').needsUpdate=true;
+  },100);
+}));
+
+// ===================== ANIMATION =====================
+(function animate(){
+  requestAnimationFrame(animate);
+  orbit.update();
+  renderer.render(scene,camera);
+})();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ===================== INIT =====================
+console.log('[MAP] Module loaded, Three.js version:', THREE.REVISION);
+updRanges();
+setTimeout(()=>{
+  document.getElementById('seed-input').value=Math.floor(Math.random()*9999999);
+  document.getElementById('progress').textContent='Initializing...';
+  startGen();
+},400);
+
+// ===================== 2D VIEW TOGGLE =====================
+let is2D = false;
+const origCamState = {};
+let flat2dMat = null;
+let origPosBackup = null;
+let origSunIntensity, origAmbientIntensity;
+
+document.getElementById('btn-toggle-2d').onclick = ()=>{
+  is2D = !is2D;
+  const btn = document.getElementById('btn-toggle-2d');
+  if(is2D){
+    btn.textContent = '3D View';
+    btn.classList.add('active');
+    origCamState.pos = camera.position.clone();
+    origCamState.rot = camera.rotation.clone();
+    origCamState.fov = camera.fov;
+    origSunIntensity = sun.intensity;
+    origAmbientIntensity = 0;
+    scene.children.forEach(c=>{ if(c.isAmbientLight) origAmbientIntensity = c.intensity; });
+
+    origPosBackup = new Float32Array(pos.array);
+    for(let i=0;i<pos.count;i++) pos.setY(i,0);
+    pos.needsUpdate = true;
+
+    flat2dMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    mesh.material = flat2dMat;
+    renderer.shadowMap.enabled = false;
+    sun.intensity = 0;
+    scene.children.forEach(c=>{ if(c.isAmbientLight) c.intensity = 1.5; });
+    waterMesh.visible = false;
+
+    const mapAspect = 500/250;
+    const vh = 270, vw = vh * mapAspect;
+    camera.position.set(0, 300, 0);
+    camera.rotation.set(-Math.PI/2, 0, 0);
+    orbit.target.set(0, 0, 0);
+    orbit.update();
+  } else {
+    btn.textContent = '2D View';
+    btn.classList.remove('active');
+
+    pos.array.set(origPosBackup);
+    pos.needsUpdate = true;
+    mesh.material = mat;
+    renderer.shadowMap.enabled = true;
+    sun.intensity = origSunIntensity;
+    scene.children.forEach(c=>{ if(c.isAmbientLight) c.intensity = origAmbientIntensity; });
+    waterMesh.visible = true;
+
+    camera.position.copy(origCamState.pos);
+    camera.rotation.copy(origCamState.rot);
+    camera.fov = origCamState.fov;
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+};
+
+// ===================== PNG DOWNLOAD =====================
+function doDownload(flat){
+  const origPos = camera.position.clone();
+  const origRot = camera.rotation.clone();
+  const origFov = camera.fov;
+  const origShadows = renderer.shadowMap.enabled;
+  const origExposure = renderer.toneMappingExposure;
+  const origTone = renderer.toneMapping;
+
+  const exportW = 2048;
+  const exportH = 1024;
+  const mapAspect = 500/250;
+
+  const orthoH = 270;
+  const orthoW = orthoH * mapAspect;
+  const orthoCam = new THREE.OrthographicCamera(-orthoW/2, orthoW/2, orthoH/2, -orthoH/2, 1, 1000);
+  orthoCam.position.set(0, 300, 0);
+  orthoCam.rotation.set(-Math.PI/2, 0, 0);
+
+  renderer.setSize(exportW, exportH);
+  renderer.setPixelRatio(1);
+  renderer.shadowMap.enabled = false;
+
+  const wasWaterVisible = waterMesh.visible;
+  waterMesh.visible = false;
+
+  let flatMat = null;
+  let origPositions = null;
+  if(flat){
+    renderer.toneMapping = THREE.NoToneMapping;
+    flatMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    mesh.material = flatMat;
+    origPositions = new Float32Array(pos.array);
+    for(let i=0;i<pos.count;i++) pos.setY(i,0);
+    pos.needsUpdate = true;
+  }
+
+  renderer.render(scene, orthoCam);
+  const url = renderer.domElement.toDataURL('image/png');
+
+  if(flat){
+    pos.array.set(origPositions);
+    pos.needsUpdate = true;
+    mesh.material = mat;
+    mat.needsUpdate = true;
+    renderer.toneMapping = origTone;
+    renderer.toneMappingExposure = origExposure;
+  }
+
+  renderer.shadowMap.enabled = origShadows;
+  waterMesh.visible = wasWaterVisible;
+  camera.position.copy(origPos);
+  camera.rotation.copy(origRot);
+  camera.fov = origFov;
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.render(scene, camera);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'world-map-'+(flat?'flat':'3d')+'-'+(currentSeed||'draft')+'.png';
+  a.click();
+}
+
+document.getElementById('btn-download').onclick = ()=>doDownload(false);
+document.getElementById('btn-download-flat').onclick = ()=>doDownload(true);
+
+</script>
+</body>
+</html>
