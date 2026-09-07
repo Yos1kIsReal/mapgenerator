@@ -75,6 +75,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .dl-2d { border-color: rgba(200,160,80,0.4); color: #da8; }
 .dl-2d:hover { background: rgba(60,40,10,0.94); border-color: rgba(200,160,80,0.7); }
 .dl-2d.active { background: rgba(60,40,10,0.94); border-color: rgba(200,160,80,0.8); color: #fc8; }
+.dl-paper { border-color: rgba(220,220,220,0.4); color: #ddd; }
+.dl-paper:hover { background: rgba(50,50,50,0.94); border-color: rgba(220,220,220,0.7); }
+.dl-paper.active { background: #fff; border-color: #fff; color: #111; }
 </style>
 </head>
 <body>
@@ -232,6 +235,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 <div id="info">LMB drag: Rotate | RMB drag: Tilt | Scroll: Zoom</div>
 
 <div id="btn-download-wrap">
+  <button id="btn-toggle-paper" class="dl-btn dl-paper">Paper Mode</button>
   <button id="btn-toggle-2d" class="dl-btn dl-2d">2D View</button>
   <button id="btn-download" class="dl-btn">Download 3D</button>
   <button id="btn-download-flat" class="dl-btn dl-flat">Download Map</button>
@@ -409,7 +413,25 @@ function getUserColors(){
   };
 }
 
+let paperMode = false;
 function getColor(h, sl, nx, nz, noiseRef, tempShift, humidShift, snowLvl, beachW, oceanD, uc) {
+  if(paperMode){
+    if(!heightData) return [1,1,1];
+    const x = Math.min(MAP_W-1, Math.max(0, Math.floor(nx*MAP_W+0.001)));
+    const z = Math.min(MAP-1, Math.max(0, Math.floor(nz*MAP+0.001)));
+    const idx = z*MAP_W+x;
+    const isLand = heightData[idx] >= sl;
+    for(let dz=-1;dz<=1;dz++){
+      for(let dx=-1;dx<=1;dx++){
+        if(dx===0&&dz===0) continue;
+        const nx2=x+dx, nz2=z+dz;
+        if(nx2<0||nx2>=MAP_W||nz2<0||nz2>=MAP) continue;
+        const nh = heightData[nz2*MAP_W+nx2];
+        if((nh >= sl) !== isLand) return [0,0,0];
+      }
+    }
+    return isLand ? [1,0.97,0.74] : [1,1,1];
+  }
   if(!uc) uc = getUserColors();
   const deepWater    = uc.deepWater;
   const midWater     = [(uc.deepWater[0]+uc.shallowWater[0])*0.5,(uc.deepWater[1]+uc.shallowWater[1])*0.5,(uc.deepWater[2]+uc.shallowWater[2])*0.5];
@@ -641,6 +663,12 @@ async function generateWorld(seedVal, S) {
     geo.getAttribute('color').needsUpdate=true;
     geo.computeVertexNormals();
     waterMesh.position.y=sl*heightScale;
+    if(paperMode){
+      scene.background = new THREE.Color(0xffffff);
+      renderer.toneMapping = THREE.NoToneMapping;
+      if(!(mesh.material instanceof THREE.MeshBasicMaterial)) mesh.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      waterMesh.visible = false;
+    }
   }
 
   function blobHeight(nx, nz, bx, bz, br, cn){
@@ -989,6 +1017,45 @@ setTimeout(()=>{
   startGen();
 },400);
 
+// ===================== PAPER MODE =====================
+function recolorPaper(){
+  if(!heightData) return;
+  const S = getSettings();
+  const sl = S.seaLevel;
+  for(let i=0;i<MAP_W*MAP;i++){
+    const h=clamp(heightData[i],-0.3,1.1);
+    const [r,g,b]=getColor(h,sl,(i%MAP_W)/MAP_W,Math.floor(i/MAP_W)/MAP,null,0,0,0,0,0,null);
+    col[i*3]=r;col[i*3+1]=g;col[i*3+2]=b;
+  }
+  geo.getAttribute('color').needsUpdate=true;
+}
+
+let origTone, origExposure;
+document.getElementById('btn-toggle-paper').onclick = ()=>{
+  paperMode = !paperMode;
+  const btn=document.getElementById('btn-toggle-paper');
+  btn.classList.toggle('active', paperMode);
+  btn.textContent = paperMode ? 'Normal Mode' : 'Paper Mode';
+  waterMesh.visible = !paperMode;
+  if(paperMode){
+    origTone = renderer.toneMapping;
+    origExposure = renderer.toneMappingExposure;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMappingExposure = 1;
+    scene.background = new THREE.Color(0xffffff);
+    if(!is2D){
+      mesh.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    }
+  } else {
+    renderer.toneMapping = origTone || THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = origExposure || 1.35;
+    scene.background = new THREE.Color(0x060612);
+    mesh.material = is2D ? flat2dMat : mat;
+    if(is2D) waterMesh.visible = false;
+  }
+  recolorPaper();
+};
+
 // ===================== 2D VIEW TOGGLE =====================
 let is2D = false;
 const origCamState = {};
@@ -1032,11 +1099,20 @@ document.getElementById('btn-toggle-2d').onclick = ()=>{
 
     pos.array.set(origPosBackup);
     pos.needsUpdate = true;
-    mesh.material = mat;
-    renderer.shadowMap.enabled = true;
-    sun.intensity = origSunIntensity;
-    scene.children.forEach(c=>{ if(c.isAmbientLight) c.intensity = origAmbientIntensity; });
-    waterMesh.visible = true;
+    if(paperMode){
+      mesh.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      scene.background = new THREE.Color(0xffffff);
+      waterMesh.visible = false;
+      renderer.shadowMap.enabled = false;
+      sun.intensity = 0;
+      scene.children.forEach(c=>{ if(c.isAmbientLight) c.intensity = 1.5; });
+    } else {
+      mesh.material = mat;
+      renderer.shadowMap.enabled = true;
+      sun.intensity = origSunIntensity;
+      scene.children.forEach(c=>{ if(c.isAmbientLight) c.intensity = origAmbientIntensity; });
+      waterMesh.visible = true;
+    }
 
     camera.position.copy(origCamState.pos);
     camera.rotation.copy(origCamState.rot);
